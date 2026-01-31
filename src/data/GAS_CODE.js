@@ -138,7 +138,8 @@ function saveWrongAnswer(payload) {
         // 보통 webContentLink나 thumbnailLink를 사용하지만, 직접 접근 가능한 ID 기반 링크 사용
         // ID: file.getId() -> https://lh3.googleusercontent.com/d/{ID} 형식은 인증 필요없는 경우가 많음 (CDN)
         // 혹은 https://drive.google.com/uc?id={ID}
-        publicImageUrl = `https://drive.google.com/uc?export=view&id=${file.getId()}`;
+        // publicImageUrl = `https://drive.google.com/uc?export=view&id=${file.getId()}`;
+        publicImageUrl = `https://lh3.googleusercontent.com/d/${file.getId()}`;
     }
 
     const newRow = [

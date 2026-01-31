@@ -188,6 +188,7 @@ export default function PrintPage() {
                                                         alt="오답 문제"
                                                         className="w-full h-full object-contain"
                                                         style={{ maxHeight: '100%' }}
+                                                        referrerPolicy="no-referrer"
                                                     />
                                                 ) : (
                                                     <div className="flex items-center justify-center w-full h-24 text-gray-400 text-sm bg-gray-50">이미지 없음</div>
