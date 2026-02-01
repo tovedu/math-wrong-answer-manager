@@ -12,11 +12,12 @@ interface AnalysisResult {
 
 export async function analyzeImage(imageBase64: string): Promise<AnalysisResult> {
     if (!process.env.GEMINI_API_KEY) {
-        console.error("GEMINI_API_KEY is missing");
-        throw new Error("Server configuration error: API Key missing");
+        console.error("Server Error: GEMINI_API_KEY is missing in environment variables.");
+        throw new Error("Vercel 환경 변수에 GEMINI_API_KEY가 설정되지 않았습니다.");
     }
 
     try {
+        console.log("Starting Analysis with model: gemini-1.5-pro");
         // Switching to gemini-1.5-pro as flash might be causing 404s on some keys/projects
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
 
@@ -66,19 +67,14 @@ export async function analyzeImage(imageBase64: string): Promise<AnalysisResult>
         const mappedLevel = validLevels.includes(data.problemLevel) ? data.problemLevel : 'Mid';
         const mappedType = validTypes.includes(data.questionType) ? data.questionType : 'Computation';
 
-        console.log(`Mapping Result - Level: ${mappedLevel}, Type: ${mappedType}`);
-
         return {
             problemLevel: mappedLevel,
             questionType: mappedType
         };
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("AI Analysis Failed:", error);
-        // Fallback defaults in case of error, to prevent blocking the flow
-        return {
-            problemLevel: 'Mid',
-            questionType: 'Computation'
-        };
+        // Throw the error so the client knows it failed
+        throw new Error(`AI 분석 실패: ${error.message || '알 수 없는 오류'}`);
     }
 }

@@ -99,9 +99,9 @@ export default function InputPage() {
             console.log("Client Received Analysis:", result);
             setProblemLevel(result.problemLevel);
             setQuestionType(result.questionType);
-        } catch (error) {
+        } catch (error: any) {
             console.error("Analysis failed:", error);
-            alert("AI 분석에 실패했습니다. (콘솔 확인 필요)");
+            alert(error.message || "AI 분석 중 오류가 발생했습니다.");
         } finally {
             setIsAnalyzing(false);
         }
