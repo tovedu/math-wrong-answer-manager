@@ -17,9 +17,11 @@ export async function analyzeImage(imageBase64: string): Promise<AnalysisResult>
     }
 
     try {
-        console.log("Starting Analysis with model: gemini-1.5-pro");
-        // Switching to gemini-1.5-pro as flash might be causing 404s on some keys/projects
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+        console.log("Starting Analysis with model: gemini-1.5-flash");
+        // Using 'gemini-1.5-flash' as it is the current standard for high-speed, low-cost tasks.
+        // If this fails with 404, it might be due to the API key project not having access to 1.5 yet,
+        // in which case 'gemini-pro' (1.0) could be a backup, but 1.5-flash should be generally available.
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
         const prompt = `
         Analyze this math problem image (Korean elementary school math) and categorize it.
