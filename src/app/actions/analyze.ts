@@ -23,6 +23,9 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
             return { success: false, error: "Vercel 환경 변수에 GEMINI_API_KEY가 설정되지 않았습니다." };
         }
 
+        // Sanitize Key: Remove any whitespace/newlines that might have been pasted
+        const validApiKey = apiKey.trim();
+
         console.log("Starting Analysis via RAW FETCH (Multi-Strategy)...");
 
         // Strategy Definition: specific model + api version
@@ -107,7 +110,28 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
         }
 
         if (!finalJson) {
-            throw new Error(`All strategies failed. Last error: ${lastError}`);
+            // Debug: If all failed, try listing available models to see what IS allowed
+            try {
+                console.log("All strategies failed. Attempting to list available models...");
+                const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${validApiKey}`;
+                const listResp = await fetch(listUrl);
+                if (listResp.ok) {
+                    const listJson = await listResp.json();
+                    const modelNames = listJson.models?.map((m: any) => m.name) || [];
+                    console.log("Available Models for this Key:", modelNames);
+                    throw new Error(`사용 가능한 모델이 없습니다. (Available: ${modelNames.join(', ') || 'None'})`);
+                } else {
+                    const listErr = await listResp.text();
+                    console.error("Failed to list models:", listErr);
+                    throw new Error(`모델 목록 조회 실패 (${listResp.status}): ${listErr}`);
+                }
+            } catch (debugErr: any) {
+                // Throw the original error combined with debug info if available
+                if (debugErr.message.includes("사용 가능한 모델") || debugErr.message.includes("조회 실패")) {
+                    throw debugErr;
+                }
+                throw new Error(`All strategies failed. Last error: ${lastError}`);
+            }
         }
 
         console.log("Gemini Raw Response:", JSON.stringify(finalJson, null, 2));
@@ -142,7 +166,8 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
         console.error("AI Analysis Failed:", error);
 
         // Debug info: Show first 5 chars of the key
-        const keyPrefix = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.substring(0, 5) + "..." : "undefined";
+        const key = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.trim() : "";
+        const keyPrefix = key.length > 5 ? key.substring(0, 5) + "..." : "short/undefined";
 
         return {
             success: false,
