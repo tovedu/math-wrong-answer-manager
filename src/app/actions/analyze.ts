@@ -28,40 +28,63 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
         console.log("Initializing Gemini Client...");
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-        console.log("Starting Analysis with model: gemini-1.5-flash");
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        // List of models to try in order of preference
+        const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro-vision"];
 
-        const prompt = `
-        Analyze this math problem image (Korean elementary school math) and categorize it.
-        
-        Fields to determine:
-        1. problemLevel:
-           - "Low": Basic simple problems
-           - "Mid": Standard textbook problems
-           - "High": Challenging problems requiring multiple steps
-           - "Top": Olympiad or very difficult problems
-           
-        2. questionType:
-           - "Concept": Asking for definitions or basic properties
-           - "Computation": Pure calculation
-           - "Application": Word problems, applying concepts to situations
-           - "ProblemSolving": Complex reasoning, spatial puzzle, or deep logic
+        let result;
+        let lastError;
 
-        Return ONLY a raw JSON string (no markdown formatting) with this structure:
-        { "problemLevel": "...", "questionType": "..." }
-        `;
+        for (const modelName of modelsToTry) {
+            try {
+                console.log(`Attempting analysis with model: ${modelName}`);
+                const model = genAI.getGenerativeModel({ model: modelName });
 
-        const imagePart = {
-            inlineData: {
-                data: imageBase64,
-                mimeType: "image/jpeg",
-            },
-        };
+                const prompt = `
+                Analyze this math problem image (Korean elementary school math) and categorize it.
+                
+                Fields to determine:
+                1. problemLevel:
+                   - "Low": Basic simple problems
+                   - "Mid": Standard textbook problems
+                   - "High": Challenging problems requiring multiple steps
+                   - "Top": Olympiad or very difficult problems
+                   
+                2. questionType:
+                   - "Concept": Asking for definitions or basic properties
+                   - "Computation": Pure calculation
+                   - "Application": Word problems, applying concepts to situations
+                   - "ProblemSolving": Complex reasoning, spatial puzzle, or deep logic
 
-        const result = await model.generateContent([prompt, imagePart]);
-        const response = await result.response;
-        const text = response.text();
+                Return ONLY a raw JSON string (no markdown formatting) with this structure:
+                { "problemLevel": "...", "questionType": "..." }
+                `;
 
+                const imagePart = {
+                    inlineData: {
+                        data: imageBase64,
+                        mimeType: "image/jpeg",
+                    },
+                };
+
+                const generateResult = await model.generateContent([prompt, imagePart]);
+                const response = await generateResult.response;
+                const text = response.text();
+
+                // If successful, assign to result and break
+                result = text;
+                break;
+            } catch (e: any) {
+                console.warn(`Model ${modelName} failed:`, e.message);
+                lastError = e;
+                // Continue to next model
+            }
+        }
+
+        if (!result) {
+            throw new Error(`All models failed. Last error: ${lastError?.message}`);
+        }
+
+        const text = result;
         console.log("Gemini Raw Response:", text);
 
         const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
