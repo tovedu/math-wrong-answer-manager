@@ -17,8 +17,8 @@ export async function analyzeImage(imageBase64: string): Promise<AnalysisResult>
     }
 
     try {
-        // Use gemini-1.5-flash for speed and cost efficiency
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        // Switching to gemini-1.5-pro as flash might be causing 404s on some keys/projects
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
 
         const prompt = `
         Analyze this math problem image (Korean elementary school math) and categorize it.
@@ -52,17 +52,25 @@ export async function analyzeImage(imageBase64: string): Promise<AnalysisResult>
         const response = await result.response;
         const text = response.text();
 
+        console.log("Gemini Raw Response:", text); // Debug Log
+
         // Clean potential markdown wrappers
         const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
         const data = JSON.parse(jsonStr);
+        console.log("Parsed Analysis Data:", data); // Debug Log
 
         // Validation / Fallback
         const validLevels: ProblemLevel[] = ['Low', 'Mid', 'High', 'Top'];
         const validTypes: QuestionType[] = ['Concept', 'Computation', 'Application', 'ProblemSolving'];
 
+        const mappedLevel = validLevels.includes(data.problemLevel) ? data.problemLevel : 'Mid';
+        const mappedType = validTypes.includes(data.questionType) ? data.questionType : 'Computation';
+
+        console.log(`Mapping Result - Level: ${mappedLevel}, Type: ${mappedType}`);
+
         return {
-            problemLevel: validLevels.includes(data.problemLevel) ? data.problemLevel : 'Mid',
-            questionType: validTypes.includes(data.questionType) ? data.questionType : 'Computation'
+            problemLevel: mappedLevel,
+            questionType: mappedType
         };
 
     } catch (error) {
