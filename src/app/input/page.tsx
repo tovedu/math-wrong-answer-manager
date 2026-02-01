@@ -72,14 +72,37 @@ export default function InputPage() {
         return () => window.removeEventListener('paste', handlePaste);
     }, []);
 
-    const handleNewImage = (file: File) => {
+    const handleNewImage = async (file: File) => {
         setFile(file);
         const url = URL.createObjectURL(file);
         setPreviewUrl(url);
 
-        // Analysis feature is temporarily disabled during migration
-        // setIsAnalyzing(true);
-        // ...
+        // Start AI Analysis
+        setIsAnalyzing(true);
+        try {
+            // Convert to Base64
+            const base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const result = reader.result as string;
+                    if (result.includes(',')) {
+                        resolve(result.split(',')[1]);
+                    } else {
+                        resolve(result);
+                    }
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+
+            const result = await analyzeImage(base64);
+            setProblemLevel(result.problemLevel);
+            setQuestionType(result.questionType);
+        } catch (error) {
+            console.error("Analysis failed:", error);
+        } finally {
+            setIsAnalyzing(false);
+        }
     };
 
     const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {

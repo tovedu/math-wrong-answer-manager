@@ -33,6 +33,8 @@ There are two ways to deploy. **Option A (GitHub)** is recommended.
 5.  **Important:** In the "Environment Variables" section, add:
     *   **Key:** `NEXT_PUBLIC_GAS_URL`
     *   **Value:** `https://script.google.com/macros/s/AKfycbyj0bkb5lQHHFmxRk6PVoNd8e6jfPVJTT6ZuJra9A9lWfJHCNdgokg9kSDJPcedDm2Y/exec`
+    *   **Key:** `GEMINI_API_KEY`
+    *   **Value:** (Your Google Gemini API Key starting with `AIza...`)
 6.  Click **Deploy**.
 
 ### Option B: Via Vercel CLI
