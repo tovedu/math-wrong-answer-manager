@@ -97,8 +97,13 @@ export default function InputPage() {
 
             const result = await analyzeImage(base64);
             console.log("Client Received Analysis:", result);
-            setProblemLevel(result.problemLevel);
-            setQuestionType(result.questionType);
+
+            if (result.success) {
+                setProblemLevel(result.data.problemLevel);
+                setQuestionType(result.data.questionType);
+            } else {
+                alert(result.error);
+            }
         } catch (error: any) {
             console.error("Analysis failed:", error);
             alert(error.message || "AI 분석 중 오류가 발생했습니다.");

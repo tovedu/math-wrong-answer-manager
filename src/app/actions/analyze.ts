@@ -5,20 +5,24 @@ import { ProblemLevel, QuestionType } from '../../types';
 // Force usage of Node.js runtime (not Edge) to ensure compatibility with Google AI SDK
 // removed runtime export to fix build error
 
+// Define return type with success/error pattern
 interface AnalysisResult {
     problemLevel: ProblemLevel;
     questionType: QuestionType;
 }
 
-export async function analyzeImage(imageBase64: string): Promise<AnalysisResult> {
+type ActionResponse =
+    | { success: true; data: AnalysisResult }
+    | { success: false; error: string };
+
+export async function analyzeImage(imageBase64: string): Promise<ActionResponse> {
     try {
         if (!process.env.GEMINI_API_KEY) {
             console.error("Server Error: GEMINI_API_KEY is missing.");
-            throw new Error("Vercel 환경 변수에 GEMINI_API_KEY가 설정되지 않았습니다.");
+            return { success: false, error: "Vercel 환경 변수에 GEMINI_API_KEY가 설정되지 않았습니다." };
         }
 
         console.log("Dynamically importing Gemini Client...");
-        // Dynamic import to prevent any module loading issues at startup
         const { GoogleGenerativeAI } = await import('@google/generative-ai');
 
         console.log("Initializing Gemini Client...");
@@ -47,11 +51,10 @@ export async function analyzeImage(imageBase64: string): Promise<AnalysisResult>
         { "problemLevel": "...", "questionType": "..." }
         `;
 
-        // Note: The base64 string passed here should NOT include the data URL prefix
         const imagePart = {
             inlineData: {
                 data: imageBase64,
-                mimeType: "image/jpeg", // Defaulting to jpeg; API is generally flexible with this
+                mimeType: "image/jpeg",
             },
         };
 
@@ -59,14 +62,12 @@ export async function analyzeImage(imageBase64: string): Promise<AnalysisResult>
         const response = await result.response;
         const text = response.text();
 
-        console.log("Gemini Raw Response:", text); // Debug Log
+        console.log("Gemini Raw Response:", text);
 
-        // Clean potential markdown wrappers
         const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
         const data = JSON.parse(jsonStr);
-        console.log("Parsed Analysis Data:", data); // Debug Log
+        console.log("Parsed Analysis Data:", data);
 
-        // Validation / Fallback
         const validLevels: ProblemLevel[] = ['Low', 'Mid', 'High', 'Top'];
         const validTypes: QuestionType[] = ['Concept', 'Computation', 'Application', 'ProblemSolving'];
 
@@ -74,13 +75,18 @@ export async function analyzeImage(imageBase64: string): Promise<AnalysisResult>
         const mappedType = validTypes.includes(data.questionType) ? data.questionType : 'Computation';
 
         return {
-            problemLevel: mappedLevel,
-            questionType: mappedType
+            success: true,
+            data: {
+                problemLevel: mappedLevel,
+                questionType: mappedType
+            }
         };
 
     } catch (error: any) {
         console.error("AI Analysis Failed:", error);
-        // Throw the error so the client knows it failed
-        throw new Error(`AI 분석 실패: ${error.message || '알 수 없는 오류'}`);
+        return {
+            success: false,
+            error: `AI 분석 실패: ${error.message || '알 수 없는 오류'}`
+        };
     }
 }
