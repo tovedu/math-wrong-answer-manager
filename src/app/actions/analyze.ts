@@ -17,85 +17,77 @@ type ActionResponse =
 
 export async function analyzeImage(imageBase64: string): Promise<ActionResponse> {
     try {
-        if (!process.env.GEMINI_API_KEY) {
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
             console.error("Server Error: GEMINI_API_KEY is missing.");
             return { success: false, error: "Vercel 환경 변수에 GEMINI_API_KEY가 설정되지 않았습니다." };
         }
 
-        console.log("Dynamically importing Gemini Client...");
-        const { GoogleGenerativeAI } = await import('@google/generative-ai');
+        console.log("Starting Analysis via RAW FETCH (No SDK)...");
 
-        console.log("Initializing Gemini Client...");
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = "gemini-1.5-flash";
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-        // List of models to try in order of preference (Exhaustive list)
-        const modelsToTry = [
-            "gemini-1.5-flash",
-            "gemini-1.5-flash-001",
-            "gemini-1.5-flash-002",
-            "gemini-1.5-pro",
-            "gemini-1.5-pro-001",
-            "gemini-1.5-pro-002",
-            "gemini-2.0-flash-exp" // Try experimental as last resort
-        ];
+        const prompt = `
+        Analyze this math problem image (Korean elementary school math) and categorize it.
 
-        let result;
-        let lastError;
+        Fields to determine:
+        1. problemLevel:
+           - "Low": Basic simple problems
+           - "Mid": Standard textbook problems
+           - "High": Challenging problems requiring multiple steps
+           - "Top": Olympiad or very difficult problems
 
-        for (const modelName of modelsToTry) {
-            try {
-                console.log(`Attempting analysis with model: ${modelName}`);
-                const model = genAI.getGenerativeModel({ model: modelName });
+        2. questionType:
+           - "Concept": Asking for definitions or basic properties
+           - "Computation": Pure calculation
+           - "Application": Word problems, applying concepts to situations
+           - "ProblemSolving": Complex reasoning, spatial puzzle, or deep logic
 
-                const prompt = `
-                Analyze this math problem image (Korean elementary school math) and categorize it.
-                
-                Fields to determine:
-                1. problemLevel:
-                   - "Low": Basic simple problems
-                   - "Mid": Standard textbook problems
-                   - "High": Challenging problems requiring multiple steps
-                   - "Top": Olympiad or very difficult problems
-                   
-                2. questionType:
-                   - "Concept": Asking for definitions or basic properties
-                   - "Computation": Pure calculation
-                   - "Application": Word problems, applying concepts to situations
-                   - "ProblemSolving": Complex reasoning, spatial puzzle, or deep logic
+        Return ONLY a raw JSON string (no markdown formatting) with this structure:
+        { "problemLevel": "...", "questionType": "..." }
+        `;
 
-                Return ONLY a raw JSON string (no markdown formatting) with this structure:
-                { "problemLevel": "...", "questionType": "..." }
-                `;
+        const body = {
+            contents: [{
+                parts: [
+                    { text: prompt },
+                    {
+                        inlineData: {
+                            mimeType: "image/jpeg",
+                            data: imageBase64
+                        }
+                    }
+                ]
+            }]
+        };
 
-                const imagePart = {
-                    inlineData: {
-                        data: imageBase64,
-                        mimeType: "image/jpeg",
-                    },
-                };
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(body)
+        });
 
-                const generateResult = await model.generateContent([prompt, imagePart]);
-                const response = await generateResult.response;
-                const text = response.text();
-
-                // If successful, assign to result and break
-                result = text;
-                break;
-            } catch (e: any) {
-                console.warn(`Model ${modelName} failed:`, e.message);
-                lastError = e;
-                // Continue to next model
-            }
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Google API Error (${response.status}): ${errorText}`);
         }
 
-        if (!result) {
-            throw new Error(`All models failed. Last error: ${lastError?.message}`);
+        const json = await response.json();
+        console.log("Gemini Raw Response:", JSON.stringify(json, null, 2));
+
+        // Extract text from response structure
+        // Response format: { candidates: [ { content: { parts: [ { text: "..." } ] } } ] }
+        const candidate = json.candidates?.[0];
+        const textPart = candidate?.content?.parts?.[0]?.text;
+
+        if (!textPart) {
+            throw new Error("No text content found in AI response");
         }
 
-        const text = result;
-        console.log("Gemini Raw Response:", text);
-
-        const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        const jsonStr = textPart.replace(/```json/g, '').replace(/```/g, '').trim();
         const data = JSON.parse(jsonStr);
         console.log("Parsed Analysis Data:", data);
 
