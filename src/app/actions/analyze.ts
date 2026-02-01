@@ -23,64 +23,97 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
             return { success: false, error: "Vercel 환경 변수에 GEMINI_API_KEY가 설정되지 않았습니다." };
         }
 
-        console.log("Starting Analysis via RAW FETCH (No SDK)...");
+        console.log("Starting Analysis via RAW FETCH (Multi-Strategy)...");
 
-        const model = "gemini-1.5-flash";
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        // Strategy Definition: specific model + api version
+        const strategies = [
+            { model: "gemini-1.5-flash", version: "v1beta" },
+            { model: "gemini-1.5-flash", version: "v1" }, // GA endpoint
+            { model: "gemini-1.5-flash-001", version: "v1beta" },
+            { model: "gemini-1.5-flash-002", version: "v1beta" },
+            { model: "gemini-1.5-pro", version: "v1beta" },
+            { model: "gemini-1.5-pro", version: "v1" },
+            { model: "gemini-pro-vision", version: "v1beta" } // Legacy backup
+        ];
 
-        const prompt = `
-        Analyze this math problem image (Korean elementary school math) and categorize it.
+        let finalJson = null;
+        let lastError = null;
 
-        Fields to determine:
-        1. problemLevel:
-           - "Low": Basic simple problems
-           - "Mid": Standard textbook problems
-           - "High": Challenging problems requiring multiple steps
-           - "Top": Olympiad or very difficult problems
+        for (const strategy of strategies) {
+            try {
+                console.log(`Attempting strategy: ${strategy.model} (${strategy.version})`);
 
-        2. questionType:
-           - "Concept": Asking for definitions or basic properties
-           - "Computation": Pure calculation
-           - "Application": Word problems, applying concepts to situations
-           - "ProblemSolving": Complex reasoning, spatial puzzle, or deep logic
+                const url = `https://generativelanguage.googleapis.com/${strategy.version}/models/${strategy.model}:generateContent?key=${apiKey}`;
 
-        Return ONLY a raw JSON string (no markdown formatting) with this structure:
-        { "problemLevel": "...", "questionType": "..." }
-        `;
+                const prompt = `
+                Analyze this math problem image (Korean elementary school math) and categorize it.
+                
+                Fields to determine:
+                1. problemLevel:
+                - "Low": Basic simple problems
+                - "Mid": Standard textbook problems
+                - "High": Challenging problems requiring multiple steps
+                - "Top": Olympiad or very difficult problems
+                
+                2. questionType:
+                - "Concept": Asking for definitions or basic properties
+                - "Computation": Pure calculation
+                - "Application": Word problems, applying concepts to situations
+                - "ProblemSolving": Complex reasoning, spatial puzzle, or deep logic
 
-        const body = {
-            contents: [{
-                parts: [
-                    { text: prompt },
-                    {
-                        inlineData: {
-                            mimeType: "image/jpeg",
-                            data: imageBase64
-                        }
+                Return ONLY a raw JSON string (no markdown formatting) with this structure:
+                { "problemLevel": "...", "questionType": "..." }
+                `;
+
+                const body = {
+                    contents: [{
+                        parts: [
+                            { text: prompt },
+                            {
+                                inlineData: {
+                                    mimeType: "image/jpeg",
+                                    data: imageBase64
+                                }
+                            }
+                        ]
+                    }]
+                };
+
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body)
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    // If 404, valid key but wrong model/version -> continue
+                    if (response.status === 404) {
+                        console.warn(`Strategy ${strategy.model} (${strategy.version}) failed: ${errorText}`);
+                        lastError = `[404] ${errorText}`;
+                        continue;
                     }
-                ]
-            }]
-        };
+                    throw new Error(`Google API Error (${response.status}): ${errorText}`);
+                }
 
-        const response = await fetch(url, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(body)
-        });
+                finalJson = await response.json();
+                console.log(`Success with strategy: ${strategy.model} (${strategy.version})`);
+                break; // Success!
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Google API Error (${response.status}): ${errorText}`);
+            } catch (e: any) {
+                console.warn(`Strategy failed:`, e.message);
+                lastError = e.message;
+            }
         }
 
-        const json = await response.json();
-        console.log("Gemini Raw Response:", JSON.stringify(json, null, 2));
+        if (!finalJson) {
+            throw new Error(`All strategies failed. Last error: ${lastError}`);
+        }
+
+        console.log("Gemini Raw Response:", JSON.stringify(finalJson, null, 2));
 
         // Extract text from response structure
-        // Response format: { candidates: [ { content: { parts: [ { text: "..." } ] } } ] }
-        const candidate = json.candidates?.[0];
+        const candidate = finalJson.candidates?.[0];
         const textPart = candidate?.content?.parts?.[0]?.text;
 
         if (!textPart) {
