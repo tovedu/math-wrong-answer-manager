@@ -3,7 +3,7 @@
 import { ProblemLevel, QuestionType } from '../../types';
 
 // Force usage of Node.js runtime (not Edge) to ensure compatibility with Google AI SDK
-export const runtime = 'nodejs';
+// removed runtime export to fix build error
 
 interface AnalysisResult {
     problemLevel: ProblemLevel;
