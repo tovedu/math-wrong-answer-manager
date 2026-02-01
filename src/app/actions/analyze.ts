@@ -28,28 +28,7 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
 
         console.log("Starting Analysis via RAW FETCH (Multi-Strategy)...");
 
-        // Strategy Definition: specific model + api version
-        const strategies = [
-            { model: "gemini-2.0-flash", version: "v1beta" }, // Verified available for this user
-            { model: "gemini-1.5-flash", version: "v1beta" },
-            { model: "gemini-1.5-flash", version: "v1" }, // GA endpoint
-            { model: "gemini-1.5-flash-001", version: "v1beta" },
-            { model: "gemini-1.5-flash-002", version: "v1beta" },
-            { model: "gemini-1.5-pro", version: "v1beta" },
-            { model: "gemini-1.5-pro", version: "v1" },
-            { model: "gemini-pro-vision", version: "v1beta" } // Legacy backup
-        ];
-
-        let finalJson = null;
-        let lastError = null;
-
-        for (const strategy of strategies) {
-            try {
-                console.log(`Attempting strategy: ${strategy.model} (${strategy.version})`);
-
-                const url = `https://generativelanguage.googleapis.com/${strategy.version}/models/${strategy.model}:generateContent?key=${apiKey}`;
-
-                const prompt = `
+        const prompt = `
                 Analyze this math problem image (Korean elementary school math) and categorize it.
                 
                 Fields to determine:
@@ -69,19 +48,42 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
                 { "problemLevel": "...", "questionType": "..." }
                 `;
 
-                const body = {
-                    contents: [{
-                        parts: [
-                            { text: prompt },
-                            {
-                                inlineData: {
-                                    mimeType: "image/jpeg",
-                                    data: imageBase64
-                                }
-                            }
-                        ]
-                    }]
-                };
+        const body = {
+            contents: [{
+                parts: [
+                    { text: prompt },
+                    {
+                        inlineData: {
+                            mimeType: "image/jpeg",
+                            data: imageBase64
+                        }
+                    }
+                ]
+            }]
+        };
+
+        // Strategy Definition: specific model + api version
+        const strategies = [
+            { model: "gemini-2.0-flash", version: "v1beta" }, // Verified available for this user
+            { model: "gemini-1.5-flash", version: "v1beta" },
+            { model: "gemini-1.5-flash", version: "v1" }, // GA endpoint
+            { model: "gemini-1.5-flash-001", version: "v1beta" },
+            { model: "gemini-1.5-flash-002", version: "v1beta" },
+            { model: "gemini-1.5-pro", version: "v1beta" },
+            { model: "gemini-1.5-pro", version: "v1" },
+            { model: "gemini-pro-vision", version: "v1beta" } // Legacy backup
+        ];
+
+        let finalJson = null;
+        let lastError = null;
+
+        for (const strategy of strategies) {
+            try {
+                console.log(`Attempting strategy: ${strategy.model} (${strategy.version})`);
+
+                const url = `https://generativelanguage.googleapis.com/${strategy.version}/models/${strategy.model}:generateContent?key=${validApiKey}`;
+
+
 
                 const response = await fetch(url, {
                     method: "POST",
@@ -111,27 +113,73 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
         }
 
         if (!finalJson) {
-            // Debug: If all failed, try listing available models to see what IS allowed
+            console.log("Static strategies failed. Attempting DYNAMIC MODEL DISCOVERY...");
+
             try {
-                console.log("All strategies failed. Attempting to list available models...");
+                // 1. Fetch available models
                 const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${validApiKey}`;
                 const listResp = await fetch(listUrl);
-                if (listResp.ok) {
-                    const listJson = await listResp.json();
-                    const modelNames = listJson.models?.map((m: any) => m.name) || [];
-                    console.log("Available Models for this Key:", modelNames);
-                    throw new Error(`사용 가능한 모델이 없습니다. (Available: ${modelNames.join(', ') || 'None'})`);
-                } else {
-                    const listErr = await listResp.text();
-                    console.error("Failed to list models:", listErr);
-                    throw new Error(`모델 목록 조회 실패 (${listResp.status}): ${listErr}`);
+
+                if (!listResp.ok) {
+                    throw new Error(`Model listing failed: ${listResp.statusText}`);
                 }
-            } catch (debugErr: any) {
-                // Throw the original error combined with debug info if available
-                if (debugErr.message.includes("사용 가능한 모델") || debugErr.message.includes("조회 실패")) {
-                    throw debugErr;
+
+                const listJson = await listResp.json();
+                const availableModels = listJson.models || [];
+
+                // 2. Filter and Sort candidates
+                // Priority: Flash > Pro > others. prefer latest/newer versions.
+                const candidates = availableModels
+                    .map((m: any) => m.name.replace('models/', '')) // Remove prefix for consistency
+                    .filter((name: string) => name.includes('gemini') && !name.includes('embedding') && !name.includes('imagen'))
+                    .sort((a: string, b: string) => {
+                        // Sort logic: Put 'flash' first, then 'pro'
+                        const aScore = (a.includes('flash') ? 2 : 0) + (a.includes('pro') ? 1 : 0);
+                        const bScore = (b.includes('flash') ? 2 : 0) + (b.includes('pro') ? 1 : 0);
+                        return bScore - aScore;
+                    });
+
+                console.log("Discovered Candidates:", candidates);
+
+                if (candidates.length === 0) {
+                    throw new Error("No suitable Gemini text-generation models found in account.");
                 }
-                throw new Error(`All strategies failed. Last error: ${lastError}`);
+
+                // 3. Dynamic Retry Loop
+                for (const modelName of candidates) {
+                    try {
+                        console.log(`Dynamic Attempt: ${modelName}`);
+                        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${validApiKey}`;
+
+                        const response = await fetch(url, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(body) // Reuse same body
+                        });
+
+                        if (!response.ok) {
+                            const err = await response.text();
+                            console.warn(`Dynamic ${modelName} failed: ${err}`);
+                            continue;
+                        }
+
+                        finalJson = await response.json();
+                        console.log(`Success with DYNAMIC model: ${modelName}`);
+                        break; // Success!
+
+                    } catch (innerErr) {
+                        console.warn(`Dynamic attempt error for ${modelName}`, innerErr);
+                    }
+                }
+
+                if (!finalJson) {
+                    throw new Error(`All dynamic candidates failed. Available: ${candidates.join(', ')}`);
+                }
+
+            } catch (discoveryErr: any) {
+                console.error("Dynamic discovery failed:", discoveryErr);
+                // If discovery fails, throw the original error + discovery error
+                throw new Error(`All strategies failed. Discovery also failed: ${discoveryErr.message}`);
             }
         }
 
