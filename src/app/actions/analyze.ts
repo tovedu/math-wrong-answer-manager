@@ -1,9 +1,9 @@
 'use server';
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ProblemLevel, QuestionType } from '../../types';
 
-// Removed top-level init
+// Force usage of Node.js runtime (not Edge) to ensure compatibility with Google AI SDK
+export const runtime = 'nodejs';
 
 interface AnalysisResult {
     problemLevel: ProblemLevel;
@@ -16,6 +16,10 @@ export async function analyzeImage(imageBase64: string): Promise<AnalysisResult>
             console.error("Server Error: GEMINI_API_KEY is missing.");
             throw new Error("Vercel 환경 변수에 GEMINI_API_KEY가 설정되지 않았습니다.");
         }
+
+        console.log("Dynamically importing Gemini Client...");
+        // Dynamic import to prevent any module loading issues at startup
+        const { GoogleGenerativeAI } = await import('@google/generative-ai');
 
         console.log("Initializing Gemini Client...");
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
