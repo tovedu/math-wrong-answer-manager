@@ -11,26 +11,16 @@ interface AnalysisResult {
 }
 
 export async function analyzeImage(imageBase64: string): Promise<AnalysisResult> {
-    if (!process.env.GEMINI_API_KEY) {
-        console.error("Server Error: GEMINI_API_KEY is missing in environment variables.");
-        throw new Error("Vercel 환경 변수에 GEMINI_API_KEY가 설정되지 않았습니다.");
-    }
-
     try {
+        if (!process.env.GEMINI_API_KEY) {
+            console.error("Server Error: GEMINI_API_KEY is missing.");
+            throw new Error("Vercel 환경 변수에 GEMINI_API_KEY가 설정되지 않았습니다.");
+        }
+
         console.log("Initializing Gemini Client...");
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-        console.log("Starting Analysis with model: gemini-pro");
-        // Fallback to 'gemini-pro' (1.0) which is the most widely supported stable model.
-        // It's less multi-modal capable than 1.5 but handles images fine usually (requires gemini-pro-vision? No, gemini-1.5 encompasses both. gemini-pro is text only in some contexts?)
-        // WAIT: gemini-pro (1.0) is TEXT ONLY. gemini-pro-vision is for images.
-        // BUT gemini-1.5-flash handles BOTH. 
-        // IF 1.5-flash failed, maybe we should try 'gemini-1.5-flash-latest' OR just 'gemini-1.5-flash' again ensuring the init is correct.
-        // Let's try 'gemini-1.5-flash' again but with the init fix. 
-        // If that fails, I will try 'gemini-1.5-pro' again. 
-        // Actually, let's try 'gemini-1.5-flash-001' or 'gemini-1.5-flash-latest'. 
-        // Let's stick to 'gemini-1.5-flash' but guarantee the key is set.
-
+        console.log("Starting Analysis with model: gemini-1.5-flash");
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
         const prompt = `
