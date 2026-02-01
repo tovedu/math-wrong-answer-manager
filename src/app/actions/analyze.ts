@@ -64,7 +64,9 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
 
         // Strategy Definition: specific model + api version
         const strategies = [
-            { model: "gemini-2.0-flash", version: "v1beta" }, // Verified available for this user
+            { model: "gemini-2.0-flash-lite", version: "v1beta" }, // Backup: Has remaining quota
+            { model: "gemini-2.5-flash-lite", version: "v1beta" }, // Backup: Has remaining quota
+            { model: "gemini-2.0-flash", version: "v1beta" },
             { model: "gemini-1.5-flash", version: "v1beta" },
             { model: "gemini-1.5-flash", version: "v1" }, // GA endpoint
             { model: "gemini-1.5-flash-001", version: "v1beta" },
