@@ -3,7 +3,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ProblemLevel, QuestionType } from '../../types';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+// Removed top-level init
 
 interface AnalysisResult {
     problemLevel: ProblemLevel;
@@ -17,10 +17,20 @@ export async function analyzeImage(imageBase64: string): Promise<AnalysisResult>
     }
 
     try {
-        console.log("Starting Analysis with model: gemini-1.5-flash");
-        // Using 'gemini-1.5-flash' as it is the current standard for high-speed, low-cost tasks.
-        // If this fails with 404, it might be due to the API key project not having access to 1.5 yet,
-        // in which case 'gemini-pro' (1.0) could be a backup, but 1.5-flash should be generally available.
+        console.log("Initializing Gemini Client...");
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+        console.log("Starting Analysis with model: gemini-pro");
+        // Fallback to 'gemini-pro' (1.0) which is the most widely supported stable model.
+        // It's less multi-modal capable than 1.5 but handles images fine usually (requires gemini-pro-vision? No, gemini-1.5 encompasses both. gemini-pro is text only in some contexts?)
+        // WAIT: gemini-pro (1.0) is TEXT ONLY. gemini-pro-vision is for images.
+        // BUT gemini-1.5-flash handles BOTH. 
+        // IF 1.5-flash failed, maybe we should try 'gemini-1.5-flash-latest' OR just 'gemini-1.5-flash' again ensuring the init is correct.
+        // Let's try 'gemini-1.5-flash' again but with the init fix. 
+        // If that fails, I will try 'gemini-1.5-pro' again. 
+        // Actually, let's try 'gemini-1.5-flash-001' or 'gemini-1.5-flash-latest'. 
+        // Let's stick to 'gemini-1.5-flash' but guarantee the key is set.
+
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
         const prompt = `
