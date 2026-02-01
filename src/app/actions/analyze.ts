@@ -115,9 +115,13 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
 
     } catch (error: any) {
         console.error("AI Analysis Failed:", error);
+
+        // Debug info: Show first 5 chars of the key
+        const keyPrefix = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.substring(0, 5) + "..." : "undefined";
+
         return {
             success: false,
-            error: `AI 분석 실패: ${error.message || '알 수 없는 오류'}`
+            error: `AI 분석 실패 (Key: ${keyPrefix}): ${error.message || '알 수 없는 오류'}`
         };
     }
 }
