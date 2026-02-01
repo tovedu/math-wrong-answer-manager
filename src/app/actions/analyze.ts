@@ -28,8 +28,16 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
         console.log("Initializing Gemini Client...");
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-        // List of models to try in order of preference
-        const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro-vision"];
+        // List of models to try in order of preference (Exhaustive list)
+        const modelsToTry = [
+            "gemini-1.5-flash",
+            "gemini-1.5-flash-001",
+            "gemini-1.5-flash-002",
+            "gemini-1.5-pro",
+            "gemini-1.5-pro-001",
+            "gemini-1.5-pro-002",
+            "gemini-2.0-flash-exp" // Try experimental as last resort
+        ];
 
         let result;
         let lastError;
