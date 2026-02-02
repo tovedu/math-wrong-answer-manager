@@ -178,7 +178,7 @@ export async function getAnalysisStats(filters?: FilterOptions): Promise<Analysi
     const pieData = Object.entries(levelCounts).map(([name, value]) => ({ name, value }));
 
     // Recent Wrongs
-    const recentWrongs = [...answers].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
+    const recentWrongs = [...answers].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 100);
 
     return {
         totalWrong,

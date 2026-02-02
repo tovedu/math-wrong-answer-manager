@@ -233,9 +233,9 @@ export default function AnalysisPage() {
                 {/* 최근 오답 리스트 */}
                 <div className="bg-white p-6 rounded-lg shadow-md md:col-span-2 lg:col-span-1">
                     <h2 className="text-xl font-semibold mb-4 text-gray-700">최근 오답 목록</h2>
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
                         <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
+                            <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
                                 <tr>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">날짜</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">문제 내용</th>
