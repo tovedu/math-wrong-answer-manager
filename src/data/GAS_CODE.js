@@ -63,6 +63,10 @@ function doPost(e) {
             return saveWrongAnswer(data.payload);
         }
 
+        if (action === "update_status") {
+            return updateAnswerStatus(data.payload);
+        }
+
         return responseJSON({ status: "error", message: "Invalid action" });
     } catch (error) {
         return responseJSON({ status: "error", message: error.toString() });
@@ -70,6 +74,32 @@ function doPost(e) {
 }
 
 // --- Helper Functions ---
+
+function updateAnswerStatus(payload) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_NAME);
+    const data = sheet.getDataRange().getValues();
+
+    // ID로 행 찾기 (헤더 제외하고 검색)
+    // data[i][0]는 ID 컬럼
+    let rowIndex = -1;
+    for (let i = 1; i < data.length; i++) {
+        if (data[i][0] == payload.id) {
+            rowIndex = i + 1; // 1-based index
+            break;
+        }
+    }
+
+    if (rowIndex === -1) {
+        return responseJSON({ status: "error", message: "Answer not found" });
+    }
+
+    // 11번째 컬럼 (Is Resolved) 업데이트
+    // boolean 값을 저장
+    sheet.getRange(rowIndex, 11).setValue(payload.isResolved);
+
+    return responseJSON({ status: "success", message: "Updated successfully" });
+}
 
 function getStudents() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();

@@ -54,6 +54,27 @@ export async function saveWrongAnswer(data: Omit<WrongAnswer, 'id' | 'isResolved
     return result.savedData;
 }
 
+export async function updateWrongAnswerStatus(id: string, isResolved: boolean) {
+    if (!GAS_API_URL) throw new Error('GAS_API_URL is not defined');
+
+    const response = await fetch(GAS_API_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            action: 'update_status',
+            payload: { id, isResolved }
+        })
+    });
+
+    const result = await response.json();
+    if (result.status === 'error') {
+        throw new Error(result.message);
+    }
+    return result;
+}
+
 export async function getWrongAnswers(filters?: FilterOptions): Promise<WrongAnswer[]> {
     if (!GAS_API_URL) return [];
 

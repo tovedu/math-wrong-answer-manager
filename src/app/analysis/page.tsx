@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { CheckCircle, AlertTriangle, BookOpen, TrendingUp } from 'lucide-react';
-import { getAnalysisStats, AnalysisStats, getStudentsList } from '../actions/wrongAnswer';
+import { getAnalysisStats, AnalysisStats, getStudentsList, updateWrongAnswerStatus } from '../actions/wrongAnswer';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
@@ -264,7 +264,22 @@ export default function AnalysisPage() {
                                                 {wrong.isResolved ? (
                                                     <span className="text-green-600 flex items-center"><CheckCircle size={16} className="mr-1" /> 완료</span>
                                                 ) : (
-                                                    <span className="text-red-500 flex items-center"><AlertTriangle size={16} className="mr-1" /> 미해결</span>
+                                                    <button
+                                                        onClick={async () => {
+                                                            if (confirm('이 문제를 해결 완료 상태로 변경하시겠습니까?')) {
+                                                                try {
+                                                                    await updateWrongAnswerStatus(wrong.id, true);
+                                                                    alert('변경되었습니다.');
+                                                                    fetchStats(); // Refresh data
+                                                                } catch (e) {
+                                                                    alert('오류가 발생했습니다: ' + e);
+                                                                }
+                                                            }
+                                                        }}
+                                                        className="text-red-500 flex items-center hover:bg-red-50 px-2 py-1 rounded transition"
+                                                    >
+                                                        <AlertTriangle size={16} className="mr-1" /> 미해결 (클릭하여 완료)
+                                                    </button>
                                                 )}
                                             </td>
                                         </tr>
