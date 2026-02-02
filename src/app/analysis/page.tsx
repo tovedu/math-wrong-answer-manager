@@ -237,30 +237,55 @@ export default function AnalysisPage() {
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">날짜</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">단원</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">난이도</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">날짜</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">문제 내용</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">단원</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">난이도</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">상태</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {stats.recentWrongs.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4} className="px-6 py-4 text-center text-gray-500">데이터가 없습니다.</td>
+                                        <td colSpan={5} className="px-6 py-4 text-center text-gray-500">데이터가 없습니다.</td>
                                     </tr>
                                 ) : (
                                     stats.recentWrongs.map((wrong) => (
                                         <tr key={wrong.id}>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{wrong.date}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{wrong.chapter}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 align-top">{wrong.date}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-900 align-top">
+                                                <div className="flex flex-col gap-2">
+                                                    {wrong.imageUrl && (
+                                                        <div className="relative w-24 h-24 border rounded overflow-hidden bg-gray-50 shrink-0">
+                                                            <img
+                                                                src={wrong.imageUrl}
+                                                                alt="Problem"
+                                                                className="w-full h-full object-cover"
+                                                                referrerPolicy="no-referrer"
+                                                            />
+                                                        </div>
+                                                    )}
+                                                    {wrong.memo && (
+                                                        <p className="text-gray-600 text-xs whitespace-pre-wrap line-clamp-2 max-w-[200px]">
+                                                            {wrong.memo}
+                                                        </p>
+                                                    )}
+                                                    {!wrong.imageUrl && !wrong.memo && (
+                                                        <span className="text-gray-400 text-xs italic">내용 없음</span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-gray-900 align-top">
+                                                <div className="whitespace-normal break-keep">{wrong.chapter}</div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 align-top">
                                                 <span className={"px-2 inline-flex text-xs leading-5 font-semibold rounded-full " + (
                                                     (wrong.problemLevel === 'High' || wrong.problemLevel === 'Top') ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
                                                 )}>
                                                     {wrong.problemLevel}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 align-top">
                                                 {wrong.isResolved ? (
                                                     <span className="text-green-600 flex items-center"><CheckCircle size={16} className="mr-1" /> 완료</span>
                                                 ) : (
@@ -276,9 +301,10 @@ export default function AnalysisPage() {
                                                                 }
                                                             }
                                                         }}
-                                                        className="text-red-500 flex items-center hover:bg-red-50 px-2 py-1 rounded transition"
+                                                        className="text-red-500 flex items-center hover:bg-red-50 px-2 py-1 rounded transition text-xs whitespace-nowrap"
                                                     >
-                                                        <AlertTriangle size={16} className="mr-1" /> 미해결 (클릭하여 완료)
+                                                        <AlertTriangle size={16} className="mr-1" /> 미해결
+                                                        <br />(클릭하여 완료)
                                                     </button>
                                                 )}
                                             </td>
