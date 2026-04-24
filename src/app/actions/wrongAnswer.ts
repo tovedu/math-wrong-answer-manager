@@ -1,6 +1,7 @@
 'use server';
 
-import { join } from 'path';
+import { ERROR_TYPE_OPTIONS, getErrorTypeByCode } from '../../data/errorTypes';
+
 const GAS_API_URL = process.env.NEXT_PUBLIC_GAS_URL || 'https://script.google.com/macros/s/AKfycbyj0bkb5lQHHFmxRk6PVoNd8e6jfPVJTT6ZuJra9A9lWfJHCNdgokg9kSDJPcedDm2Y/exec';
 
 export interface WrongAnswer {
@@ -12,6 +13,12 @@ export interface WrongAnswer {
     chapter: string;
     problemLevel: 'Low' | 'Mid' | 'High' | 'Top';
     questionType: 'Concept' | 'Computation' | 'Application' | 'ProblemSolving';
+    /**
+     * 오답 원인 — 저장 형식: "[코드]|[풀네임]"
+     * @example "개|개념 부족"
+     * 기존 데이터는 이 값이 없을 수 있음 (undefined/빈 문자열 허용)
+     */
+    errorType?: string;
     memo?: string;
     imageUrl?: string;
     isResolved: boolean;
@@ -25,10 +32,16 @@ export interface FilterOptions {
     chapter?: string;
 }
 
+/** 오답 원인별 집계 결과 타입 */
+export interface ErrorTypeData {
+    code: string;
+    label: string;
+    count: number;
+}
+
 export async function saveWrongAnswer(data: Omit<WrongAnswer, 'id' | 'isResolved'> & { imageBase64?: string, imageName?: string, imageType?: string }) {
     if (!GAS_API_URL) throw new Error('GAS_API_URL is not defined');
 
-    // Payload for GAS
     const payload = {
         ...data,
         id: crypto.randomUUID(),
@@ -91,7 +104,6 @@ export async function getWrongAnswers(filters?: FilterOptions): Promise<WrongAns
 
     let answers: WrongAnswer[] = result.data;
 
-    // Client-side filtering (GAS code has some, but we do it here for full consistency with previous logic)
     if (filters) {
         if (filters.studentId) {
             answers = answers.filter(a => a.studentId.includes(filters.studentId!));
@@ -122,12 +134,13 @@ export interface AnalysisStats {
     barData: { name: string; count: number }[];
     pieData: { name: string; value: number }[];
     recentWrongs: WrongAnswer[];
+    /** 오답 원인별 집계 (ERROR_TYPE_OPTIONS 순서 기준, errorType 없는 데이터 제외) */
+    errorTypeData: ErrorTypeData[];
 }
 
 export async function getAnalysisStats(filters?: FilterOptions): Promise<AnalysisStats> {
     const answers = await getWrongAnswers(filters);
 
-    // ... (Stats calculation logic remains exactly the same)
     const totalWrong = answers.length;
     const resolved = answers.filter(a => a.isResolved).length;
     const resolutionRate = totalWrong === 0 ? 0 : Math.round((resolved / totalWrong) * 100);
@@ -178,7 +191,28 @@ export async function getAnalysisStats(filters?: FilterOptions): Promise<Analysi
     const pieData = Object.entries(levelCounts).map(([name, value]) => ({ name, value }));
 
     // Recent Wrongs
-    const recentWrongs = [...answers].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 100);
+    const recentWrongs = [...answers]
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .slice(0, 100);
+
+    // ★ 오답 원인별 집계 (ERROR_TYPE_OPTIONS 순서 기준)
+    // 코드값(split('|')[0]) 기준으로 카운트
+    // null / undefined / '' 인 레코드는 집계에서 제외 (기존 데이터 호환)
+    const errorCodeCounts: Record<string, number> = {};
+    answers.forEach(a => {
+        if (!a.errorType) return; // 기존 데이터 제외
+        const code = a.errorType.split('|')[0];
+        if (getErrorTypeByCode(code)) {
+            errorCodeCounts[code] = (errorCodeCounts[code] || 0) + 1;
+        }
+    });
+
+    // ERROR_TYPE_OPTIONS 순서를 유지하며 결과 배열 생성
+    const errorTypeData: ErrorTypeData[] = ERROR_TYPE_OPTIONS.map(item => ({
+        code: item.code,
+        label: item.label,
+        count: errorCodeCounts[item.code] || 0,
+    }));
 
     return {
         totalWrong,
@@ -188,7 +222,8 @@ export async function getAnalysisStats(filters?: FilterOptions): Promise<Analysi
         radarData,
         barData,
         pieData,
-        recentWrongs
+        recentWrongs,
+        errorTypeData,
     };
 }
 

@@ -1,14 +1,21 @@
 'use server';
 
 import { ProblemLevel, QuestionType } from '../../types';
+import { ErrorTypeCode, ERROR_TYPE_OPTIONS, getErrorTypeByCode } from '../../data/errorTypes';
 
 // Force usage of Node.js runtime (not Edge) to ensure compatibility with Google AI SDK
 // removed runtime export to fix build error
 
-// Define return type with success/error pattern
 interface AnalysisResult {
     problemLevel: ProblemLevel;
     questionType: QuestionType;
+    /**
+     * AI가 추론한 오답 원인 코드.
+     * 사용자가 이미 수동 선택한 경우에는 이 값을 무시합니다.
+     */
+    errorTypeCode?: ErrorTypeCode;
+    /** errorTypeCode를 value 형식("[코드]|[풀네임]")으로 변환한 값 */
+    errorTypeValue?: string;
 }
 
 type ActionResponse =
@@ -23,10 +30,14 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
             return { success: false, error: "Vercel 환경 변수에 GEMINI_API_KEY가 설정되지 않았습니다." };
         }
 
-        // Sanitize Key: Remove any whitespace/newlines that might have been pasted
         const validApiKey = apiKey.trim();
 
         console.log("Starting Analysis via RAW FETCH (Multi-Strategy)...");
+
+        // 오답 원인 코드 목록을 문자열로 변환하여 프롬프트에 주입
+        const errorCodeList = ERROR_TYPE_OPTIONS
+            .map(item => `"${item.code}" (${item.label})`)
+            .join(', ');
 
         const prompt = `
                 Analyze this math problem image (Korean elementary school math) and categorize it.
@@ -44,8 +55,12 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
                 - "Application": Word problems, applying concepts to situations
                 - "ProblemSolving": Complex reasoning, spatial puzzle, or deep logic
 
+                3. errorTypeCode: The most likely reason a student got this wrong.
+                Choose EXACTLY ONE code from this list: ${errorCodeList}
+                Return only the single character code (e.g., "계", "개", "문", "논", "식", "응").
+
                 Return ONLY a raw JSON string (no markdown formatting) with this structure:
-                { "problemLevel": "...", "questionType": "..." }
+                { "problemLevel": "...", "questionType": "...", "errorTypeCode": "..." }
                 `;
 
         const body = {
@@ -62,18 +77,17 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
             }]
         };
 
-        // Strategy Definition: specific model + api version
         const strategies = [
-            { model: "gemini-2.0-flash-lite", version: "v1beta" }, // Backup: Has remaining quota
-            { model: "gemini-2.5-flash-lite", version: "v1beta" }, // Backup: Has remaining quota
+            { model: "gemini-2.0-flash-lite", version: "v1beta" },
+            { model: "gemini-2.5-flash-lite", version: "v1beta" },
             { model: "gemini-2.0-flash", version: "v1beta" },
             { model: "gemini-1.5-flash", version: "v1beta" },
-            { model: "gemini-1.5-flash", version: "v1" }, // GA endpoint
+            { model: "gemini-1.5-flash", version: "v1" },
             { model: "gemini-1.5-flash-001", version: "v1beta" },
             { model: "gemini-1.5-flash-002", version: "v1beta" },
             { model: "gemini-1.5-pro", version: "v1beta" },
             { model: "gemini-1.5-pro", version: "v1" },
-            { model: "gemini-pro-vision", version: "v1beta" } // Legacy backup
+            { model: "gemini-pro-vision", version: "v1beta" }
         ];
 
         let finalJson = null;
@@ -85,8 +99,6 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
 
                 const url = `https://generativelanguage.googleapis.com/${strategy.version}/models/${strategy.model}:generateContent?key=${validApiKey}`;
 
-
-
                 const response = await fetch(url, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -95,7 +107,6 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
 
                 if (!response.ok) {
                     const errorText = await response.text();
-                    // If 404, valid key but wrong model/version -> continue
                     if (response.status === 404) {
                         console.warn(`Strategy ${strategy.model} (${strategy.version}) failed: ${errorText}`);
                         lastError = `[404] ${errorText}`;
@@ -106,7 +117,7 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
 
                 finalJson = await response.json();
                 console.log(`Success with strategy: ${strategy.model} (${strategy.version})`);
-                break; // Success!
+                break;
 
             } catch (e: any) {
                 console.warn(`Strategy failed:`, e.message);
@@ -118,7 +129,6 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
             console.log("Static strategies failed. Attempting DYNAMIC MODEL DISCOVERY...");
 
             try {
-                // 1. Fetch available models
                 const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${validApiKey}`;
                 const listResp = await fetch(listUrl);
 
@@ -129,13 +139,10 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
                 const listJson = await listResp.json();
                 const availableModels = listJson.models || [];
 
-                // 2. Filter and Sort candidates
-                // Priority: Flash > Pro > others. prefer latest/newer versions.
                 const candidates = availableModels
-                    .map((m: any) => m.name.replace('models/', '')) // Remove prefix for consistency
+                    .map((m: any) => m.name.replace('models/', ''))
                     .filter((name: string) => name.includes('gemini') && !name.includes('embedding') && !name.includes('imagen'))
                     .sort((a: string, b: string) => {
-                        // Sort logic: Put 'flash' first, then 'pro'
                         const aScore = (a.includes('flash') ? 2 : 0) + (a.includes('pro') ? 1 : 0);
                         const bScore = (b.includes('flash') ? 2 : 0) + (b.includes('pro') ? 1 : 0);
                         return bScore - aScore;
@@ -147,7 +154,6 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
                     throw new Error("No suitable Gemini text-generation models found in account.");
                 }
 
-                // 3. Dynamic Retry Loop
                 for (const modelName of candidates) {
                     try {
                         console.log(`Dynamic Attempt: ${modelName}`);
@@ -156,7 +162,7 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
                         const response = await fetch(url, {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify(body) // Reuse same body
+                            body: JSON.stringify(body)
                         });
 
                         if (!response.ok) {
@@ -167,7 +173,7 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
 
                         finalJson = await response.json();
                         console.log(`Success with DYNAMIC model: ${modelName}`);
-                        break; // Success!
+                        break;
 
                     } catch (innerErr) {
                         console.warn(`Dynamic attempt error for ${modelName}`, innerErr);
@@ -180,14 +186,12 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
 
             } catch (discoveryErr: any) {
                 console.error("Dynamic discovery failed:", discoveryErr);
-                // If discovery fails, throw the original error + discovery error
                 throw new Error(`All strategies failed. Discovery also failed: ${discoveryErr.message}`);
             }
         }
 
         console.log("Gemini Raw Response:", JSON.stringify(finalJson, null, 2));
 
-        // Extract text from response structure
         const candidate = finalJson.candidates?.[0];
         const textPart = candidate?.content?.parts?.[0]?.text;
 
@@ -205,18 +209,27 @@ export async function analyzeImage(imageBase64: string): Promise<ActionResponse>
         const mappedLevel = validLevels.includes(data.problemLevel) ? data.problemLevel : 'Mid';
         const mappedType = validTypes.includes(data.questionType) ? data.questionType : 'Computation';
 
+        // errorTypeCode 검증: ERROR_TYPE_OPTIONS 목록에 있는 코드인지 확인
+        const rawCode = data.errorTypeCode as string | undefined;
+        const matchedErrorType = rawCode ? getErrorTypeByCode(rawCode) : undefined;
+        const errorTypeCode = matchedErrorType?.code;
+        const errorTypeValue = matchedErrorType?.value;
+
+        console.log("Mapped errorType:", errorTypeCode, "→", errorTypeValue);
+
         return {
             success: true,
             data: {
                 problemLevel: mappedLevel,
-                questionType: mappedType
+                questionType: mappedType,
+                errorTypeCode,
+                errorTypeValue,
             }
         };
 
     } catch (error: any) {
         console.error("AI Analysis Failed:", error);
 
-        // Debug info: Show first 5 chars of the key
         const key = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.trim() : "";
         const keyPrefix = key.length > 5 ? key.substring(0, 5) + "..." : "short/undefined";
 

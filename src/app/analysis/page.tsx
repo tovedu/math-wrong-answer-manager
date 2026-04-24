@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { CheckCircle, AlertTriangle, BookOpen, TrendingUp } from 'lucide-react';
 import { getAnalysisStats, AnalysisStats, getStudentsList, updateWrongAnswerStatus } from '../actions/wrongAnswer';
+import { getErrorTypeByValue } from '../../data/errorTypes';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
@@ -134,7 +135,7 @@ export default function AnalysisPage() {
             </div>
 
             {/* 상단 주요 통계 카드 */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-white p-6 rounded-lg shadow-md flex items-center space-x-4 border-l-4 border-red-500">
                     <div className="p-3 bg-red-100 rounded-full text-red-600">
                         <AlertTriangle size={24} />
@@ -172,6 +173,25 @@ export default function AnalysisPage() {
                     </div>
                 </div>
             </div>
+
+            {/* ★ 오답 원인별 빈도 차트 */}
+            {stats.errorTypeData && stats.errorTypeData.some(d => d.count > 0) && (
+                <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-indigo-500">
+                    <h2 className="text-xl font-semibold mb-1 text-gray-700">⚠️ 오답 원인 분석</h2>
+                    <p className="text-xs text-gray-400 mb-4">errorType이 기록된 데이터만 집계됩니다.</p>
+                    <div className="h-48">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={stats.errorTypeData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                                <Tooltip formatter={(value, name) => [value + '건', '오답 수']} />
+                                <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} name="오답 수" />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            )}
 
             {/* 차트 영역 */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -237,11 +257,12 @@ export default function AnalysisPage() {
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">날짜</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">문제 내용</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">단원</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">난이도</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">상태</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">날짜</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">문제 내용</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">단원</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">난이도</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">오답 원인</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">상태</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
@@ -252,8 +273,8 @@ export default function AnalysisPage() {
                                 ) : (
                                     stats.recentWrongs.map((wrong) => (
                                         <tr key={wrong.id}>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 align-top">{wrong.date}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-900 align-top">
+                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 align-top">{wrong.date}</td>
+                                            <td className="px-4 py-4 text-sm text-gray-900 align-top">
                                                 <div className="flex flex-col gap-2">
                                                     {wrong.imageUrl && (
                                                         <div className="relative w-24 h-24 border rounded overflow-hidden bg-gray-50 shrink-0">
@@ -275,17 +296,27 @@ export default function AnalysisPage() {
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 text-sm text-gray-900 align-top">
+                                            <td className="px-4 py-4 text-sm text-gray-900 align-top">
                                                 <div className="whitespace-normal break-keep">{wrong.chapter}</div>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 align-top">
+                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 align-top">
                                                 <span className={"px-2 inline-flex text-xs leading-5 font-semibold rounded-full " + (
                                                     (wrong.problemLevel === 'High' || wrong.problemLevel === 'Top') ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
                                                 )}>
                                                     {wrong.problemLevel}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 align-top">
+                                            {/* ★ 오답 원인 컬럼 */}
+                                            <td className="px-4 py-4 whitespace-nowrap text-sm align-top">
+                                                {wrong.errorType ? (
+                                                    <span className="px-2 py-1 inline-flex text-xs font-semibold rounded-full bg-indigo-100 text-indigo-800">
+                                                        {getErrorTypeByValue(wrong.errorType)?.label ?? wrong.errorType.split('|')[1] ?? wrong.errorType}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-gray-300 text-xs">-</span>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 align-top">
                                                 {wrong.isResolved ? (
                                                     <span className="text-green-600 flex items-center"><CheckCircle size={16} className="mr-1" /> 완료</span>
                                                 ) : (
@@ -295,7 +326,7 @@ export default function AnalysisPage() {
                                                                 try {
                                                                     await updateWrongAnswerStatus(wrong.id, true);
                                                                     alert('변경되었습니다.');
-                                                                    fetchStats(); // Refresh data
+                                                                    fetchStats();
                                                                 } catch (e) {
                                                                     alert('오류가 발생했습니다: ' + e);
                                                                 }
@@ -304,7 +335,6 @@ export default function AnalysisPage() {
                                                         className="text-red-500 flex items-center hover:bg-red-50 px-2 py-1 rounded transition text-xs whitespace-nowrap"
                                                     >
                                                         <AlertTriangle size={16} className="mr-1" /> 미해결
-                                                        <br />(클릭하여 완료)
                                                     </button>
                                                 )}
                                             </td>
